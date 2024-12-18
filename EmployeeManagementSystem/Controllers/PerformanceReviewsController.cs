@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EmployeeManagementSystem.Models;
+using EmployeeManagementSystem.DTOs;
 
 namespace EmployeeManagementSystem.Controllers
 {
@@ -20,88 +21,72 @@ namespace EmployeeManagementSystem.Controllers
             _context = context;
         }
 
-        // GET: api/PerformanceReviews
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<PerformanceReview>>> GetPerformanceReviews()
+        public async Task<ActionResult<IEnumerable<PerformanceReviewDto>>> GetPerformanceReviews()
         {
-            return await _context.PerformanceReviews.ToListAsync();
+            var reviews = await _context.PerformanceReviews
+                .Include(r => r.Employee)
+                .Select(r => new PerformanceReviewDto
+                {
+                    PerformanceReviewId = r.PerformanceReviewId,
+                  //  EmployeeName = r.Employee.Name,
+                    ReviewDate = r.ReviewDate,
+                    ReviewScore = r.ReviewScore,
+                    ReviewNotes = r.ReviewNotes
+                })
+                .ToListAsync();
+
+            return Ok(reviews);
         }
 
-        // GET: api/PerformanceReviews/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<PerformanceReview>> GetPerformanceReview(int id)
+        [HttpPost]
+        public async Task<ActionResult> CreatePerformanceReview(PerformanceReviewDto reviewDto)
         {
-            var performanceReview = await _context.PerformanceReviews.FindAsync(id);
+            var review = new PerformanceReview
+            {
+                EmployeeId = reviewDto.EmployeeId,
+                ReviewDate = reviewDto.ReviewDate,
+                ReviewScore = reviewDto.ReviewScore,
+                ReviewNotes = reviewDto.ReviewNotes
+            };
 
-            if (performanceReview == null)
+            _context.PerformanceReviews.Add(review);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetPerformanceReviews), new { id = review.PerformanceReviewId }, reviewDto);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdatePerformanceReview(int id, PerformanceReviewDto reviewDto)
+        {
+            var review = await _context.PerformanceReviews.FindAsync(id);
+            if (review == null)
             {
                 return NotFound();
             }
 
-            return performanceReview;
-        }
+            review.ReviewDate = reviewDto.ReviewDate;
+            review.ReviewScore = reviewDto.ReviewScore;
+            review.ReviewNotes = reviewDto.ReviewNotes;
 
-        // PUT: api/PerformanceReviews/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutPerformanceReview(int id, PerformanceReview performanceReview)
-        {
-            if (id != performanceReview.PerformanceReviewId)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(performanceReview).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!PerformanceReviewExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
 
-        // POST: api/PerformanceReviews
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<PerformanceReview>> PostPerformanceReview(PerformanceReview performanceReview)
-        {
-            _context.PerformanceReviews.Add(performanceReview);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetPerformanceReview", new { id = performanceReview.PerformanceReviewId }, performanceReview);
-        }
-
-        // DELETE: api/PerformanceReviews/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePerformanceReview(int id)
         {
-            var performanceReview = await _context.PerformanceReviews.FindAsync(id);
-            if (performanceReview == null)
+            var review = await _context.PerformanceReviews.FindAsync(id);
+            if (review == null)
             {
                 return NotFound();
             }
 
-            _context.PerformanceReviews.Remove(performanceReview);
+            _context.PerformanceReviews.Remove(review);
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private bool PerformanceReviewExists(int id)
-        {
-            return _context.PerformanceReviews.Any(e => e.PerformanceReviewId == id);
         }
     }
 }

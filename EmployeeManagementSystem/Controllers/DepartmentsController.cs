@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using EmployeeManagementSystem.Models;
+using EmployeeManagementSystem.DTOs;
 
 namespace EmployeeManagementSystem.Controllers
 {
@@ -20,70 +21,68 @@ namespace EmployeeManagementSystem.Controllers
             _context = context;
         }
 
-        // GET: api/Departments
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Department>>> GetDepartments()
+        public async Task<ActionResult<IEnumerable<GetDepartmentDto>>> GetDepartments()
         {
-            return await _context.Departments.ToListAsync();
+            var departments = await _context.Departments
+                .Include(d => d.Employees)
+                .Select(d => new GetDepartmentDto
+                {
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name,
+                    ManagerId = d.ManagerId,
+                    ManagerName = _context.Employees
+                      .Where(e => e.EmployeeId == d.ManagerId)
+                      .Select(e => e.Name)
+                      .FirstOrDefault(),
+                    Budget = d.Budget,
+                    Employees = d.Employees.Select(e => new EmployeeDto
+                    {
+                        EmployeeId = e.EmployeeId,
+                        Name = e.Name,
+                        Email = e.Email
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return Ok(departments);
         }
 
-        // GET: api/Departments/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Department>> GetDepartment(int id)
+        [HttpPost]
+        public async Task<ActionResult> CreateDepartment(PostDepartmentDto postDepartmentDto)
+        {
+            var department = new Department
+            {
+                Name = postDepartmentDto.Name,
+                ManagerId = postDepartmentDto.ManagerId,
+                Budget = postDepartmentDto.Budget
+            };
+
+            _context.Departments.Add(department);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetDepartments), new { id = department.DepartmentId }, department);
+        }
+
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateDepartment(int id, PostDepartmentDto departmentDto)
         {
             var department = await _context.Departments.FindAsync(id);
-
             if (department == null)
             {
                 return NotFound();
             }
 
-            return department;
-        }
+            department.Name = departmentDto.Name;
+            department.ManagerId = departmentDto.ManagerId;
+            department.Budget = departmentDto.Budget;
 
-        // PUT: api/Departments/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutDepartment(int id, Department department)
-        {
-            if (id != department.DepartmentId)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(department).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!DepartmentExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
 
-        // POST: api/Departments
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Department>> PostDepartment(Department department)
-        {
-            _context.Departments.Add(department);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetDepartment", new { id = department.DepartmentId }, department);
-        }
-
-        // DELETE: api/Departments/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteDepartment(int id)
         {
@@ -97,11 +96,6 @@ namespace EmployeeManagementSystem.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private bool DepartmentExists(int id)
-        {
-            return _context.Departments.Any(e => e.DepartmentId == id);
         }
     }
 }
